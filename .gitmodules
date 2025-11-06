@@ -1,0 +1,6 @@
+[submodule "spec"]
+	path = spec
+	url = https://github.com/toon-format/spec.git
+[submodule "js"]
+	path = js
+	url = https://github.com/toon-format/toon.git
