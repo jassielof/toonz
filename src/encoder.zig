@@ -139,9 +139,6 @@ fn encodeArray(writer: *std.ArrayList(u8), arr: []Value, options: EncodeOptions,
     if (tabular_info) |info| {
         // Tabular format
         try writer.append(allocator, '[');
-        if (options.length_marker) {
-            try writer.append(allocator, '#');
-        }
         try std.fmt.format(writer.writer(allocator), "{d}", .{arr.len});
         try writer.appendSlice(allocator, "]{");
 
@@ -170,9 +167,6 @@ fn encodeArray(writer: *std.ArrayList(u8), arr: []Value, options: EncodeOptions,
 
     // Write array header: key[length]:
     try writer.append(allocator, '[');
-    if (options.length_marker) {
-        try std.fmt.format(writer.writer(allocator), "#", .{});
-    }
     try std.fmt.format(writer.writer(allocator), "{d}", .{arr.len});
     try writer.appendSlice(allocator, "]:");
 

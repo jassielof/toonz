@@ -141,11 +141,6 @@ const Parser = struct {
         if (self.input[self.pos] != '[') return error.ExpectedArrayHeader;
         self.pos += 1;
 
-        // Skip optional # length marker
-        if (self.pos < self.input.len and self.input[self.pos] == '#') {
-            self.pos += 1;
-        }
-
         // Parse length
         const len_start = self.pos;
         while (self.pos < self.input.len and self.input[self.pos] >= '0' and self.input[self.pos] <= '9') {

@@ -59,7 +59,6 @@ pub const Delimiter = enum {
 pub const EncodeOptions = struct {
     indent: usize = 2,
     delimiter: Delimiter = .comma,
-    length_marker: bool = false,
 };
 
 /// Options for decoding from TOON

@@ -1,6 +1,6 @@
 # Z-TOON: Zig TOON
 
-A Zig implementation of the TOON (Token-Oriented Object Notation) format, version 1.4.
+A Zig implementation of the TOON (Token-Oriented Object Notation) format, version 2.0.
 
 ## What is TOON?
 
@@ -190,7 +190,8 @@ users[2]:
 - Comprehensive error messages
 
 ### Planned 📋
-- Length markers (`#` in array headers) - parsing supported, encoding optional
+- Key folding (`keyFolding="safe"` mode) - collapse single-key object chains into dotted notation
+- Path expansion (`expandPaths="safe"` mode) - split dotted keys into nested objects
 - Strict mode validation (length mismatches, malformed headers)
 - Conformance test suite from `spec/tests/fixtures/`
 - Performance optimizations
