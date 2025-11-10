@@ -92,7 +92,7 @@ fn looksLikeNumber(s: []const u8) bool {
     return has_digit;
 }
 
-fn encodeObject(writer: *std.ArrayList(u8), obj: std.StringHashMap(Value), options: EncodeOptions, depth: usize, allocator: std.mem.Allocator) anyerror!void {
+fn encodeObject(writer: *std.ArrayList(u8), obj: std.StringArrayHashMap(Value), options: EncodeOptions, depth: usize, allocator: std.mem.Allocator) anyerror!void {
     var iter = obj.iterator();
     var first = true;
     while (iter.next()) |entry| {

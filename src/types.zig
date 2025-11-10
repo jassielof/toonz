@@ -7,7 +7,7 @@ pub const Value = union(enum) {
     number: f64,
     string: []const u8,
     array: []Value,
-    object: std.StringHashMap(Value),
+    object: std.StringArrayHashMap(Value),
 
     pub fn deinit(self: *Value, allocator: std.mem.Allocator) void {
         switch (self.*) {

@@ -177,7 +177,7 @@ fn jsonValueToToonValue(allocator: std.mem.Allocator, json_val: std.json.Value) 
             break :blk toon.Value{ .array = items };
         },
         .object => |obj| blk: {
-            var map = std.StringHashMap(toon.Value).init(allocator);
+            var map = std.StringArrayHashMap(toon.Value).init(allocator);
             errdefer map.deinit();
 
             var iter = obj.iterator();

@@ -184,10 +184,8 @@ users[2]:
 - Delimiter detection from array headers
 - Smart string quoting
 - CLI tool
-
-### In Progress 🔄
-- Field order preservation (currently HashMap iteration order)
-- Comprehensive error messages
+- Field order preservation (deterministic output)
+- Comprehensive error messages with line/column information
 
 ### Planned 📋
 - Key folding (`keyFolding="safe"` mode) - collapse single-key object chains into dotted notation
@@ -198,19 +196,18 @@ users[2]:
 - Benchmarks vs JSON
 
 ### Known Limitations ⚠️
-- Field order in tabular arrays depends on HashMap iteration (not deterministic)
-- Limited validation in non-strict mode
 - Some edge cases from spec may not be fully covered
+- Non-strict mode has limited validation
 
 ## Next Steps
 
 To continue improving this implementation:
 
-1. **Field Order Preservation**: Use an ordered map structure to preserve JSON key order in tabular arrays
-2. **Conformance Tests**: Load and run test fixtures from `spec/tests/fixtures/` for full spec compliance
-3. **Strict Mode**: Implement validation for length mismatches, invalid characters, and malformed headers
-4. **Better Delimiters**: Auto-select optimal delimiter on encode based on content analysis
-5. **Error Handling**: Improve error messages with line numbers and context
+1. **Conformance Tests**: Load and run test fixtures from `spec/tests/fixtures/` for full spec compliance
+2. **Strict Mode**: Implement validation for length mismatches, invalid characters, and malformed headers
+3. **Key Folding**: Implement optional `keyFolding="safe"` mode for dotted-path notation
+4. **Path Expansion**: Implement optional `expandPaths="safe"` mode for splitting dotted keys
+5. **Better Delimiters**: Auto-select optimal delimiter on encode based on content analysis
 6. **Performance**: Profile and optimize hot paths, especially for large tabular arrays
 7. **Documentation**: Add inline documentation and more usage examples
 

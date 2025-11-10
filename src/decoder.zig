@@ -23,11 +23,31 @@ const Parser = struct {
     line: usize,
     options: DecodeOptions,
 
+    fn getLineAndCol(self: *Parser) struct { line: usize, col: usize } {
+        var line: usize = 1;
+        var col: usize = 1;
+        var i: usize = 0;
+        while (i < self.pos and i < self.input.len) : (i += 1) {
+            if (self.input[i] == '\n') {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+        }
+        return .{ .line = line, .col = col };
+    }
+
+    fn reportError(self: *Parser, comptime message: []const u8) void {
+        const loc = self.getLineAndCol();
+        std.debug.print("TOON Parse Error at line {d}, column {d}: {s}\n", .{ loc.line, loc.col, message });
+    }
+
     fn parseValue(self: *Parser, indent_level: usize) anyerror!Value {
         self.skipWhitespace();
 
         if (self.pos >= self.input.len) {
-            return Value{ .object = std.StringHashMap(Value).init(self.allocator) };
+            return Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) };
         }
 
         // Check for root array (starts with identifier followed by '[')
@@ -66,7 +86,7 @@ const Parser = struct {
     }
 
     fn parseObject(self: *Parser, indent_level: usize) anyerror!Value {
-        var obj = std.StringHashMap(Value).init(self.allocator);
+        var obj = std.StringArrayHashMap(Value).init(self.allocator);
         errdefer {
             var iter = obj.iterator();
             while (iter.next()) |entry| {
@@ -95,6 +115,7 @@ const Parser = struct {
             // Expect colon
             self.skipSpaces();
             if (self.pos >= self.input.len or self.input[self.pos] != ':') {
+                self.reportError("Expected ':' after key");
                 self.allocator.free(key);
                 return error.ExpectedColon;
             }
@@ -103,7 +124,10 @@ const Parser = struct {
             // Check for array
             self.skipSpaces();
             if (self.pos < self.input.len and self.input[self.pos] == '[') {
-                const value = try self.parseArray(indent_level + 1, key);
+                const value = self.parseArray(indent_level + 1, key) catch |err| {
+                    self.allocator.free(key);
+                    return err;
+                };
                 try obj.put(key, value);
             } else {
                 self.skipSpaces();
@@ -113,16 +137,22 @@ const Parser = struct {
                     if (self.pos < self.input.len) self.pos += 1; // Skip newline
                     const next_indent = self.getCurrentIndent();
                     if (next_indent > indent_level) {
-                        const value = try self.parseObject(next_indent);
+                        const value = self.parseObject(next_indent) catch |err| {
+                            self.allocator.free(key);
+                            return err;
+                        };
                         try obj.put(key, value);
                         // Don't skip to next line - parseObject already consumed everything
                         continue;
                     } else {
                         // Empty object
-                        try obj.put(key, Value{ .object = std.StringHashMap(Value).init(self.allocator) });
+                        try obj.put(key, Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) });
                     }
                 } else {
-                    const value = try self.parsePrimitive();
+                    const value = self.parsePrimitive() catch |err| {
+                        self.allocator.free(key);
+                        return err;
+                    };
                     try obj.put(key, value);
                 }
             }
@@ -138,7 +168,10 @@ const Parser = struct {
         _ = indent_level;
 
         // Parse array header: [length]:
-        if (self.input[self.pos] != '[') return error.ExpectedArrayHeader;
+        if (self.input[self.pos] != '[') {
+            self.reportError("Expected '[' to start array header");
+            return error.ExpectedArrayHeader;
+        }
         self.pos += 1;
 
         // Parse length
@@ -165,6 +198,7 @@ const Parser = struct {
         }
 
         if (self.pos >= self.input.len or self.input[self.pos] != ']') {
+            self.reportError("Expected ']' to close array header");
             return error.ExpectedClosingBracket;
         }
         self.pos += 1;
@@ -229,6 +263,7 @@ const Parser = struct {
         };
 
         if (self.pos >= self.input.len or self.input[self.pos] != ':') {
+            self.reportError("Expected ':' after array header");
             return error.ExpectedColon;
         }
         self.pos += 1;
@@ -254,7 +289,7 @@ const Parser = struct {
                 self.skipSpaces();
 
                 // Parse row as delimiter-separated values
-                var obj = std.StringHashMap(Value).init(self.allocator);
+                var obj = std.StringArrayHashMap(Value).init(self.allocator);
                 errdefer obj.deinit();
 
                 for (fields, 0..) |field, i| {
@@ -367,7 +402,10 @@ const Parser = struct {
     }
 
     fn parseQuotedString(self: *Parser) anyerror!Value {
-        if (self.input[self.pos] != '"') return error.ExpectedQuote;
+        if (self.input[self.pos] != '"') {
+            self.reportError("Expected '\"' to start quoted string");
+            return error.ExpectedQuote;
+        }
         self.pos += 1;
 
         var result: std.ArrayList(u8) = .{};
@@ -404,6 +442,7 @@ const Parser = struct {
             }
         }
 
+        self.reportError("Unterminated string: missing closing quote");
         return error.UnterminatedString;
     }
 
