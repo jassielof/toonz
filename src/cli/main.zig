@@ -1,6 +1,6 @@
 const std = @import("std");
-const toon = @import("ztoon");
-const CommandError = @import("errors.zig").CommandError;
+const ztoon = @import("ztoon");
+const CommandError = ztoon.CommandError;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -67,7 +67,7 @@ fn encodeCommand(allocator: std.mem.Allocator, args: [][:0]const u8) !void {
     defer value.deinit(allocator);
 
     // Encode to TOON
-    const output = try toon.encode(allocator, value, .{});
+    const output = try ztoon.encode(allocator, value, .{});
     defer allocator.free(output);
 
     // Write to stdout
@@ -85,7 +85,7 @@ fn decodeCommand(allocator: std.mem.Allocator, args: [][:0]const u8) !void {
     defer allocator.free(input);
 
     // Decode from TOON
-    var value = try toon.decode(allocator, input, .{});
+    var value = try ztoon.decode(allocator, input, .{});
     defer value.deinit(allocator);
 
     // Convert to JSON and write directly to stdout
@@ -94,7 +94,7 @@ fn decodeCommand(allocator: std.mem.Allocator, args: [][:0]const u8) !void {
     try stdout.writeAll("\n");
 }
 
-fn writeJson(file: std.fs.File, value: toon.Value, indent: usize) anyerror!void {
+fn writeJson(file: std.fs.File, value: ztoon.Value, indent: usize) anyerror!void {
     switch (value) {
         .null => try file.writeAll("null"),
         .bool => |b| try file.writeAll(if (b) "true" else "false"),
@@ -160,29 +160,29 @@ fn writeIndentSpaces(file: std.fs.File, indent: usize) !void {
     }
 }
 
-fn jsonValueToToonValue(allocator: std.mem.Allocator, json_val: std.json.Value) !toon.Value {
+fn jsonValueToToonValue(allocator: std.mem.Allocator, json_val: std.json.Value) !ztoon.Value {
     return switch (json_val) {
-        .null => toon.Value{ .null = {} },
-        .bool => |b| toon.Value{ .bool = b },
-        .integer => |i| toon.Value{ .number = @floatFromInt(i) },
-        .float => |f| toon.Value{ .number = f },
+        .null => ztoon.Value{ .null = {} },
+        .bool => |b| ztoon.Value{ .bool = b },
+        .integer => |i| ztoon.Value{ .number = @floatFromInt(i) },
+        .float => |f| ztoon.Value{ .number = f },
         .number_string => |s| blk: {
             const num = try std.fmt.parseFloat(f64, s);
-            break :blk toon.Value{ .number = num };
+            break :blk ztoon.Value{ .number = num };
         },
-        .string => |s| toon.Value{ .string = try allocator.dupe(u8, s) },
+        .string => |s| ztoon.Value{ .string = try allocator.dupe(u8, s) },
         .array => |arr| blk: {
-            var items = try allocator.alloc(toon.Value, arr.items.len);
+            var items = try allocator.alloc(ztoon.Value, arr.items.len);
             errdefer allocator.free(items);
 
             for (arr.items, 0..) |item, i| {
                 items[i] = try jsonValueToToonValue(allocator, item);
             }
 
-            break :blk toon.Value{ .array = items };
+            break :blk ztoon.Value{ .array = items };
         },
         .object => |obj| blk: {
-            var map = std.StringArrayHashMap(toon.Value).init(allocator);
+            var map = std.StringArrayHashMap(ztoon.Value).init(allocator);
             errdefer map.deinit();
 
             var iter = obj.iterator();
@@ -192,7 +192,7 @@ fn jsonValueToToonValue(allocator: std.mem.Allocator, json_val: std.json.Value) 
                 try map.put(key, val);
             }
 
-            break :blk toon.Value{ .object = map };
+            break :blk ztoon.Value{ .object = map };
         },
     };
 }
