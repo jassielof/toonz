@@ -1,7 +1,7 @@
 //! TOON decoder - parses TOON format strings into Value structures
 //!
-//! This module provides functionality to parse TOON format text into
-//! structured Value objects. The decoder handles:
+//! This module provides functionality to parse TOON format text into structured Value objects. The decoder handles:
+//!
 //! - Indentation-based structure parsing
 //! - Multiple array formats (inline, list, tabular)
 //! - Automatic delimiter detection

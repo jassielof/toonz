@@ -1,4 +1,4 @@
-//! # TOON (Tabular Object Notation) library for Zig
+//! TOON (Token-Oriented Object Notation) library for Zig
 //!
 //! This library provides encoding and decoding functionality for the TOON format, a human-readable data serialization format designed for tabular data and configuration files.
 //!
@@ -28,8 +28,6 @@
 //! defer value.deinit(allocator);
 //! ```
 //!
-
-const std = @import("std");
 
 pub const types = @import("types.zig");
 pub const encoder = @import("encoder.zig");
