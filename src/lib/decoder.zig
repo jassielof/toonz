@@ -118,19 +118,13 @@ const Parser = struct {
             return Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) };
         }
 
-        // Check for root array (starts with identifier followed by '[')
-        if (indent_level == 0) {
-            var i = self.pos;
-            while (i < self.input.len and self.input[i] != '[' and self.input[i] != ':' and self.input[i] != '\n') {
-                i += 1;
-            }
-            if (i < self.input.len and self.input[i] == '[') {
-                // This is a root array
-                return try self.parseRootArray();
-            }
+        // Check for root array (starts DIRECTLY with '[' at indent_level 0)
+        if (indent_level == 0 and self.input[self.pos] == '[') {
+            // This is a root array - starts with [length]: directly
+            return try self.parseArray(0, null);
         }
 
-        // Check for array header
+        // Check for array header (at any indent level for nested arrays)
         if (self.peekArrayHeader()) {
             return try self.parseArray(indent_level, null);
         }
@@ -145,16 +139,7 @@ const Parser = struct {
         if (indent_level == 0) {
             return try self.parseRootPrimitive();
         }
-        return try self.parsePrimitive();
-    }
-
-    fn parseRootArray(self: *Parser) anyerror!Value {
-        // Skip key (if present) - just move to '['
-        while (self.pos < self.input.len and self.input[self.pos] != '[') {
-            self.pos += 1;
-        }
-
-        return try self.parseArray(0, null);
+        return try self.parsePrimitive(null);
     }
 
     /// Parses a root-level primitive value (consumes entire line).
@@ -206,7 +191,67 @@ const Parser = struct {
         // number (but check for leading zeros first - §4)
         if (!hasLeadingZero(token)) {
             if (std.fmt.parseFloat(f64, token)) |num| {
-                return Value{ .number = num };
+                // Normalize negative zero to positive zero (§4: decoders normalize -0 to 0)
+                // Use @abs to handle -0.0 -> 0.0 conversion
+                const normalized_num = if (num == 0.0) @abs(num) else num;
+                return Value{ .number = normalized_num };
+            } else |_| {}
+        }
+
+        // Unquoted string
+        return Value{ .string = try self.allocator.dupe(u8, token) };
+    }
+
+    /// Parses a primitive value for object properties (stops at newline only).
+    ///
+    /// Similar to parseRootPrimitive but for nested object values.
+    /// Unlike parsePrimitive (used in arrays), this doesn't stop at delimiters.
+    fn parseObjectValue(self: *Parser) anyerror!Value {
+        self.skipSpaces();
+
+        if (self.pos >= self.input.len) {
+            return Value{ .null = {} };
+        }
+
+        // Quoted string
+        if (self.input[self.pos] == '"') {
+            return try self.parseQuotedString();
+        }
+
+        // Find end of line
+        const start = self.pos;
+        while (self.pos < self.input.len and self.input[self.pos] != '\n' and self.input[self.pos] != '\r') {
+            self.pos += 1;
+        }
+
+        // Trim trailing spaces
+        var end = self.pos;
+        while (end > start and self.input[end - 1] == ' ') {
+            end -= 1;
+        }
+
+        const token = self.input[start..end];
+
+        // null
+        if (std.mem.eql(u8, token, "null")) {
+            return Value{ .null = {} };
+        }
+
+        // boolean
+        if (std.mem.eql(u8, token, "true")) {
+            return Value{ .bool = true };
+        }
+        if (std.mem.eql(u8, token, "false")) {
+            return Value{ .bool = false };
+        }
+
+        // number (but check for leading zeros first - §4)
+        if (!hasLeadingZero(token)) {
+            if (std.fmt.parseFloat(f64, token)) |num| {
+                // Normalize negative zero to positive zero (§4: decoders normalize -0 to 0)
+                // Use @abs to handle -0.0 -> 0.0 conversion
+                const normalized_num = if (num == 0.0) @abs(num) else num;
+                return Value{ .number = normalized_num };
             } else |_| {}
         }
 
@@ -252,48 +297,216 @@ const Parser = struct {
             // Parse key
             const key = try self.parseKey();
 
-            // Expect colon
-            self.skipSpaces();
-            if (self.pos >= self.input.len or self.input[self.pos] != ':') {
-                self.reportError("Expected ':' after key");
-                self.allocator.free(key);
-                return error.ExpectedColon;
-            }
-            self.pos += 1;
-
-            // Check for array
+            // Check for array notation in key: key[len]: or regular key:
             self.skipSpaces();
             if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                // key[len]: syntax - parse array directly
                 const value = self.parseArray(indent_level + 1, key) catch |err| {
                     self.allocator.free(key);
                     return err;
                 };
                 try obj.put(key, value);
             } else {
-                self.skipSpaces();
+                // Expect colon for regular key: value
+                if (self.pos >= self.input.len or self.input[self.pos] != ':') {
+                    self.reportError("Expected ':' after key");
+                    self.allocator.free(key);
+                    return error.ExpectedColon;
+                }
+                self.pos += 1;
 
-                // Check if next line is indented (nested object)
+                // Check for array after colon
+                self.skipSpaces();
+                if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                    const value = self.parseArray(indent_level + 1, key) catch |err| {
+                        self.allocator.free(key);
+                        return err;
+                    };
+                    try obj.put(key, value);
+                } else {
+                    self.skipSpaces();
+
+                    // Check if next line is indented (nested object)
+                    if (self.pos >= self.input.len or self.input[self.pos] == '\n') {
+                        if (self.pos < self.input.len) self.pos += 1; // Skip newline
+                        const next_indent = self.getCurrentIndent();
+                        if (next_indent > indent_level) {
+                            const value = self.parseObject(next_indent) catch |err| {
+                                self.allocator.free(key);
+                                return err;
+                            };
+                            try obj.put(key, value);
+                            // Don't skip to next line - parseObject already consumed everything
+                            continue;
+                        } else {
+                            // Empty object
+                            try obj.put(key, Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) });
+                        }
+                    } else {
+                        const value = self.parseObjectValue() catch |err| {
+                            self.allocator.free(key);
+                            return err;
+                        };
+                        try obj.put(key, value);
+                    }
+                }
+            }
+
+            self.skipToNextLine();
+        }
+
+        return Value{ .object = obj };
+    }
+
+    /// Parses an object that's a list item (after '-' marker).
+    ///
+    /// Special handling for list item objects:
+    /// - First property may be on the same line as the '-' (mid-line, no indent)
+    /// - Subsequent properties are on following lines at expected_indent level
+    ///
+    /// Parameters:
+    /// - `expected_indent`: The indent level expected for properties on separate lines
+    ///
+    /// Returns:
+    /// - Parsed object Value
+    fn parseListItemObject(self: *Parser, expected_indent: usize) !Value {
+        var obj = std.StringArrayHashMap(Value).init(self.allocator);
+        errdefer {
+            var iter = obj.iterator();
+            while (iter.next()) |entry| {
+                self.allocator.free(entry.key_ptr.*);
+                entry.value_ptr.deinit(self.allocator);
+            }
+            obj.deinit();
+        }
+
+        // Parse first property (on same line as '-', no indent checking needed)
+        const key = try self.parseKey();
+
+        // Check for array notation in key: key[len]: or regular key:
+        self.skipSpaces();
+        if (self.pos < self.input.len and self.input[self.pos] == '[') {
+            // key[len]: syntax - parse array directly
+            const value = self.parseArray(expected_indent, key) catch |err| {
+                self.allocator.free(key);
+                return err;
+            };
+            try obj.put(key, value);
+            // If positioned at newline, skip it to prepare for subsequent properties
+            if (self.pos < self.input.len and self.input[self.pos] == '\n') {
+                self.pos += 1;
+                self.line += 1;
+            }
+        } else {
+            // Expect colon for regular key: value
+            if (self.pos >= self.input.len or self.input[self.pos] != ':') {
+                self.reportError("Expected ':' after key");
+                self.allocator.free(key);
+                return error.ExpectedColon;
+            }
+            self.pos += 1;
+            self.skipSpaces();
+
+            // Check for array after colon
+            if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                const value = self.parseArray(expected_indent, key) catch |err| {
+                    self.allocator.free(key);
+                    return err;
+                };
+                try obj.put(key, value);
+            } else {
+                // Check if value is on next line (nested object)
                 if (self.pos >= self.input.len or self.input[self.pos] == '\n') {
                     if (self.pos < self.input.len) self.pos += 1; // Skip newline
                     const next_indent = self.getCurrentIndent();
-                    if (next_indent > indent_level) {
+                    if (next_indent >= expected_indent) {
+                        // Nested object at this indent level (first property can have nested object at expected_indent)
                         const value = self.parseObject(next_indent) catch |err| {
                             self.allocator.free(key);
                             return err;
                         };
                         try obj.put(key, value);
-                        // Don't skip to next line - parseObject already consumed everything
-                        continue;
+                        // parseObject already positioned us at start of next line, don't skip again
                     } else {
-                        // Empty object
+                        // Empty value - need to skip to next line
                         try obj.put(key, Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) });
+                        self.skipToNextLine();
                     }
                 } else {
-                    const value = self.parsePrimitive() catch |err| {
+                    // Value on same line - need to skip to next line
+                    const value = self.parseObjectValue() catch |err| {
                         self.allocator.free(key);
                         return err;
                     };
                     try obj.put(key, value);
+                    self.skipToNextLine();
+                }
+            }
+        }
+
+        // Parse subsequent properties at expected_indent level (no skip needed, already positioned)
+        while (self.pos < self.input.len) {
+            const current_indent = self.getCurrentIndent();
+            if (current_indent < expected_indent) break; // Back to less-indented content (next list item or end)
+            if (current_indent > expected_indent) break; // Shouldn't happen
+
+            // Skip indent
+            self.pos += expected_indent * self.options.indent;
+
+            // Parse key
+            const next_key = try self.parseKey();
+
+            // Check for array notation in key: key[len]: or regular key:
+            self.skipSpaces();
+            if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                // key[len]: syntax - parse array directly
+                const value = self.parseArray(expected_indent + 1, next_key) catch |err| {
+                    self.allocator.free(next_key);
+                    return err;
+                };
+                try obj.put(next_key, value);
+            } else {
+                // Expect colon for regular key: value
+                if (self.pos >= self.input.len or self.input[self.pos] != ':') {
+                    self.reportError("Expected ':' after key");
+                    self.allocator.free(next_key);
+                    return error.ExpectedColon;
+                }
+                self.pos += 1;
+                self.skipSpaces();
+
+                // Check for array after colon
+                if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                    const value = self.parseArray(expected_indent + 1, next_key) catch |err| {
+                        self.allocator.free(next_key);
+                        return err;
+                    };
+                    try obj.put(next_key, value);
+                } else {
+                    // Check if value is on next line (nested object)
+                    if (self.pos >= self.input.len or self.input[self.pos] == '\n') {
+                        if (self.pos < self.input.len) self.pos += 1; // Skip newline
+                        const next_indent = self.getCurrentIndent();
+                        if (next_indent > expected_indent) {
+                            const value = self.parseObject(next_indent) catch |err| {
+                                self.allocator.free(next_key);
+                                return err;
+                            };
+                            try obj.put(next_key, value);
+                            // parseObject already positioned us correctly
+                            continue;
+                        } else {
+                            // Empty value
+                            try obj.put(next_key, Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) });
+                        }
+                    } else {
+                        // Value on same line
+                        const value = self.parseObjectValue() catch |err| {
+                            self.allocator.free(next_key);
+                            return err;
+                        };
+                        try obj.put(next_key, value);
+                    }
                 }
             }
 
@@ -424,8 +637,10 @@ const Parser = struct {
         self.pos += 1;
 
         var items = try self.allocator.alloc(Value, length);
+        var items_initialized: usize = 0; // Track how many items have been set
         errdefer {
-            for (items[0..length]) |*item| {
+            // Only deinit items that have been initialized
+            for (items[0..items_initialized]) |*item| {
                 item.deinit(self.allocator);
             }
             self.allocator.free(items);
@@ -449,7 +664,7 @@ const Parser = struct {
 
                 for (fields, 0..) |field, i| {
                     self.skipSpaces();
-                    const value = try self.parsePrimitive();
+                    const value = try self.parsePrimitive(delimiter);
                     // Duplicate the field name for this object
                     const field_copy = try self.allocator.dupe(u8, field);
                     try obj.put(field_copy, value);
@@ -463,23 +678,19 @@ const Parser = struct {
                 }
 
                 item.* = Value{ .object = obj };
+                items_initialized += 1;
             }
             return Value{ .array = items };
         }
 
         // Check if inline (same line) or multi-line
         if (self.pos < self.input.len and self.input[self.pos] != '\n') {
-            // Inline array - detect delimiter
-            const rest = self.input[self.pos..];
-            if (std.mem.indexOf(u8, rest, "\t") != null) {
-                delimiter = .tab;
-            } else if (std.mem.indexOf(u8, rest, "|") != null) {
-                delimiter = .pipe;
-            }
-
+            // Inline array - use delimiter from header (already parsed above)
+            
             for (items, 0..) |*item, i| {
                 self.skipSpaces();
-                item.* = try self.parsePrimitive();
+                item.* = try self.parsePrimitive(delimiter);
+                items_initialized += 1;
 
                 if (i < length - 1) {
                     self.skipSpaces();
@@ -490,9 +701,20 @@ const Parser = struct {
             }
         } else {
             // Multi-line array with list items
-            for (items) |*item| {
-                self.skipToNextLine();
-                const current_indent = self.getCurrentIndent();
+            for (items, 0..) |*item, i| {
+                // For first item, skip from after ':' to first list marker
+                if (i == 0) {
+                    self.skipToNextLine();
+                } else {
+                    // After parsing previous item, check if we're already at start of new line
+                    // (parseObject leaves us at start of next line after breaking from its loop)
+                    // If not at start of line (primitive values), skip to next line
+                    const at_line_start = self.pos == 0 or self.input[self.pos - 1] == '\n';
+                    if (!at_line_start) {
+                        // Not at start of line yet, skip to it
+                        self.skipToNextLine();
+                    }
+                }
 
                 // Expect list marker
                 self.skipSpaces();
@@ -502,7 +724,39 @@ const Parser = struct {
                 self.pos += 1;
                 self.skipSpaces();
 
-                item.* = try self.parseValue(current_indent);
+                // Check if it's an empty item (just hyphen followed by newline)
+                if (self.pos >= self.input.len or self.input[self.pos] == '\n') {
+                    item.* = Value{ .object = std.StringArrayHashMap(Value).init(self.allocator) };
+                    items_initialized += 1;
+                } else {
+                    // Parse list item value
+                    // Could be: array, primitive, or object with properties
+                    // Need to determine the indent level for any subsequent properties
+                    const list_marker_indent = (self.pos - 1); // Position of '-'
+                    // Scan backwards to find start of line to calculate actual indent
+                    var line_start = list_marker_indent;
+                    while (line_start > 0 and self.input[line_start - 1] != '\n') {
+                        line_start -= 1;
+                    }
+                    const marker_indent_level = (list_marker_indent - line_start) / self.options.indent;
+                    const expected_property_indent = marker_indent_level + 1;
+
+                    // Check if this is an array (has '[' before ':')
+                    if (self.pos < self.input.len and self.input[self.pos] == '[') {
+                        // Parse as array
+                        item.* = try self.parseArray(expected_property_indent, null);
+                        items_initialized += 1;
+                    } else if (try self.peekObjectKey()) {
+                        // Check if this looks like an object (has ':' on this line)
+                        // Parse as object with special handling for list items
+                        item.* = try self.parseListItemObject(expected_property_indent);
+                        items_initialized += 1;
+                    } else {
+                        // Parse as primitive (no specific delimiter for list item primitives)
+                        item.* = try self.parsePrimitive(null);
+                        items_initialized += 1;
+                    }
+                }
             }
         }
 
@@ -520,7 +774,7 @@ const Parser = struct {
     ///
     /// Returns:
     /// - Value containing the parsed primitive
-    fn parsePrimitive(self: *Parser) anyerror!Value {
+    fn parsePrimitive(self: *Parser, stop_delimiter: ?Delimiter) anyerror!Value {
         self.skipSpaces();
 
         if (self.pos >= self.input.len) {
@@ -532,12 +786,23 @@ const Parser = struct {
             return try self.parseQuotedString();
         }
 
-        // Find end of token
+        // Find end of token - stop at newline, space, or the specific delimiter
         const start = self.pos;
         while (self.pos < self.input.len) {
             const c = self.input[self.pos];
-            if (c == '\n' or c == '\r' or c == ',' or c == '\t' or c == '|' or c == ' ') {
+            if (c == '\n' or c == '\r' or c == ' ') {
                 break;
+            }
+            // Stop at the specified delimiter only
+            if (stop_delimiter) |delim| {
+                if (c == delim.toChar()) {
+                    break;
+                }
+            } else {
+                // If no specific delimiter, stop at any delimiter (legacy behavior)
+                if (c == ',' or c == '\t' or c == '|') {
+                    break;
+                }
             }
             self.pos += 1;
         }
@@ -560,7 +825,10 @@ const Parser = struct {
         // number (but check for leading zeros first - §4)
         if (!hasLeadingZero(token)) {
             if (std.fmt.parseFloat(f64, token)) |num| {
-                return Value{ .number = num };
+                // Normalize negative zero to positive zero (§4: decoders normalize -0 to 0)
+                // Use @abs to handle -0.0 -> 0.0 conversion
+                const normalized_num = if (num == 0.0) @abs(num) else num;
+                return Value{ .number = normalized_num };
             } else |_| {}
         }
 
