@@ -1,6 +1,6 @@
-# Z-TOON: Zig TOON
+# Z-TOON
 
-A Zig implementation of the TOON (Token-Oriented Object Notation) format, version 2.0.
+A Zig parser implementation of the TOON (Token-Oriented Object Notation) format.
 
 ## What is TOON?
 
@@ -19,160 +19,9 @@ See the [full specification](https://github.com/toon-format/spec) for details in
 - [x] **Delimiter Detection**: Automatic delimiter detection in array headers `[N<delim>]`
 - [x] **CLI Tool**: Encode and decode via command line or pipes
 
-## Building
-
-Requires Zig 0.15.2 or later:
-
-```
-zig build
-```
-
-The binary will be available at `./zig-out/bin/ztoon`.
-
 ## Usage
 
-### CLI
-
-**Encode JSON to TOON:**
-```bash
-echo '{"name": "Alice", "age": 30}' | ./zig-out/bin/ztoon encode
-```
-
-Output:
-```
-name: Alice
-age: 30
-```
-
-**Decode TOON to JSON:**
-```bash
-echo 'name: Alice
-age: 30' | ./zig-out/bin/ztoon decode
-```
-
-Output:
-```json
-{
-  "name": "Alice",
-  "age": 30
-}
-```
-
-**From files:**
-```bash
-./zig-out/bin/ztoon encode input.json
-./zig-out/bin/ztoon decode input.toon
-```
-
-### Library
-
-```zig
-const std = @import("std");
-const toon = @import("ztoon");
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    // Create a value
-    var obj = std.StringHashMap(toon.Value).init(allocator);
-    defer obj.deinit();
-
-    try obj.put("name", toon.Value{ .string = "Alice" });
-    try obj.put("age", toon.Value{ .number = 30 });
-
-    const value = toon.Value{ .object = obj };
-    defer value.deinit(allocator);
-
-    // Encode to TOON
-    const encoded = try toon.encode(allocator, value, .{});
-    defer allocator.free(encoded);
-
-    std.debug.print("TOON: {s}\n", .{encoded});
-
-    // Decode from TOON
-    var decoded = try toon.decode(allocator, encoded, .{});
-    defer decoded.deinit(allocator);
-}
-```
-
-## Examples
-
-### Simple Object
-```json
-{"name": "Alice", "age": 30, "active": true}
-```
-↓
-```toon
-name: Alice
-age: 30
-active: true
-```
-
-### Nested Objects
-```json
-{"user": {"name": "Alice", "settings": {"theme": "dark"}}}
-```
-↓
-```toon
-user:
-  name: Alice
-  settings:
-    theme: dark
-```
-
-### Tabular Array (Uniform Objects)
-```json
-{"items": [
-  {"sku": "A1", "qty": 2, "price": 9.99},
-  {"sku": "B2", "qty": 1, "price": 14.5}
-]}
-```
-↓
-```toon
-items:[2]{sku,price,qty}:
-  A1,9.99,2
-  B2,14.5,1
-```
-
-### Pipe-Delimited Tabular Array
-```json
-{"users": [
-  {"name": "Alice", "role": "admin"},
-  {"name": "Bob", "role": "dev"}
-]}
-```
-↓
-```toon
-users:[2|]{name|role}:
-  Alice|admin
-  Bob|dev
-```
-
-### Primitive Array
-```json
-{"items": [1, 2, 3, 4, 5]}
-```
-↓
-```toon
-items[5]: 1,2,3,4,5
-```
-
-### Array of Objects (Non-Uniform)
-```json
-{"users": [{"name": "Alice", "id": 1}, {"name": "Bob", "id": 2}]}
-```
-↓
-```toon
-users[2]:
-  -
-    name: Alice
-    id: 1
-  -
-    name: Bob
-    id: 2
-```
+The project provides both a simple CLI for JSON to TOON conversion and vice versa, and its library.
 
 ## Status & Roadmap
 
@@ -203,25 +52,12 @@ users[2]:
 
 To continue improving this implementation:
 
-1. **Conformance Tests**: Load and run test fixtures from `spec/tests/fixtures/` for full spec compliance
 2. **Strict Mode**: Implement validation for length mismatches, invalid characters, and malformed headers
 3. **Key Folding**: Implement optional `keyFolding="safe"` mode for dotted-path notation
 4. **Path Expansion**: Implement optional `expandPaths="safe"` mode for splitting dotted keys
 5. **Better Delimiters**: Auto-select optimal delimiter on encode based on content analysis
 6. **Performance**: Profile and optimize hot paths, especially for large tabular arrays
-7. **Documentation**: Add inline documentation and more usage examples
 
 ## Testing
 
-Currently tested manually with various inputs. Run some quick tests:
-
-```bash
-# Test nested objects
-echo '{"a":1,"b":{"c":2}}' | ./zig-out/bin/ztoon encode | ./zig-out/bin/ztoon decode
-
-# Test tabular arrays
-echo '{"items":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]}' | ./zig-out/bin/ztoon encode
-
-# Test with different delimiters
-printf 'items:[2|]{name|role}:\n  Alice|admin\n  Bob|dev' | ./zig-out/bin/ztoon decode
-```
+Testing depends on the specification submodule fixtures.
