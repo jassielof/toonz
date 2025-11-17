@@ -1,10 +1,9 @@
-//! TOON (Tabular Object Notation) library for Zig
+//! # TOON (Tabular Object Notation) library for Zig
 //!
-//! This library provides encoding and decoding functionality for the TOON format,
-//! a human-readable data serialization format designed for tabular data and
-//! configuration files.
+//! This library provides encoding and decoding functionality for the TOON format, a human-readable data serialization format designed for tabular data and configuration files.
 //!
 //! TOON combines the readability of YAML with the simplicity of JSON, featuring:
+//!
 //! - Indentation-based structure for nested objects
 //! - Array headers with explicit lengths
 //! - Tabular format for arrays of homogeneous objects
@@ -14,6 +13,7 @@
 //! ## Basic Usage
 //!
 //! Encoding JSON to TOON:
+//!
 //! ```zig
 //! const value = ztoon.Value{ .object = ... };
 //! const toon_str = try ztoon.encode(allocator, value, .{});
@@ -21,11 +21,13 @@
 //! ```
 //!
 //! Decoding TOON to JSON:
+//!
 //! ```zig
 //! const input = "name: Alice\nage: 30";
 //! var value = try ztoon.decode(allocator, input, .{});
 //! defer value.deinit(allocator);
 //! ```
+//!
 
 const std = @import("std");
 
