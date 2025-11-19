@@ -72,16 +72,16 @@ test "Basic parsing" {
     const parsed = try ztoon.Parse.fromSlice(Sample, testing.allocator, toon_sample, .{});
     defer parsed.deinit();
 
-    const actual_str = std.json.fmt(parsed.value, .{});
+    var buffer: [1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(buffer[0..]);
+    std.json.Stringify.value(parsed.value, .{}, &writer) catch |err| {
+        std.debug.print("Stringifying JSON failed with:\n{s}\n", .{@errorName(err)});
+    };
+    const actual_str = std.Io.Writer.buffered(&writer);
 
-    const expected = try std.json.parseFromSlice(Sample, testing.allocator, json_sample, .{});
-    defer expected.deinit();
+    const expected_str = json_sample;
 
-    const expected_str = std.json.fmt(expected.value, .{});
-
-    std.debug.print("Parsed TOON:\n{f}\n", .{actual_str});
-
-    std.debug.print("Expected JSON:\n{f}\n", .{expected_str});
+    testing.expectEqual(expected_str, actual_str);
 }
 
 test "Basic stringify" {

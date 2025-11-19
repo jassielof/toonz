@@ -1,10 +1,6 @@
-# Z-TOON
+# TOONZ
 
-A Zig parser implementation of the TOON (Token-Oriented Object Notation) format.
-
-## What is TOON?
-
-TOON is a line-oriented, indentation-based text format that encodes the JSON data model with explicit structure and minimal quoting. It's particularly efficient for arrays of uniform objects, providing a more compact and readable alternative to JSON for structured data.
+A Zig parser implementation for the TOON (Token-Oriented Object Notation) format.
 
 See the [full specification](https://github.com/toon-format/spec) for details in depth.
 

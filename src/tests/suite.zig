@@ -5,7 +5,7 @@ const ztoon = @import("toonz");
 
 comptime {
     _ = @import("basic.zig");
-    _ = @import("parsing.zig");
+    _ = @import("parse.zig");
     _ = @import("stringify.zig");
 }
 
