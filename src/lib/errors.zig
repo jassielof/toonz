@@ -1,6 +1,6 @@
 const std = @import("std");
 
-/// Errors that can occur during scanning/parsing
+/// Scanning errors
 pub const ScanError = error{
     /// Tabs are not allowed in indentation in strict mode
     TabsNotAllowedInStrictMode,
@@ -10,7 +10,7 @@ pub const ScanError = error{
     TabsInIndentation,
 } || std.mem.Allocator.Error;
 
-/// Errors that can occur during parsing
+/// Parsing errors
 pub const ParseError = error{
     /// Invalid escape sequence in string
     InvalidEscapeSequence,
@@ -26,8 +26,8 @@ pub const ParseError = error{
     SyntaxError,
 } || std.mem.Allocator.Error;
 
-/// Errors that can occur during decoding
-pub const DecodeError = error{
+/// Stringifying errors
+pub const Stringifying = error{
     /// No content to decode
     NoContentToDecode,
     /// Expected count doesn't match actual (strict mode)
