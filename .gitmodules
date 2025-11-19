@@ -1,5 +1,5 @@
 [submodule "spec"]
-	path = spec
+	path = src/tests/spec
 	url = https://github.com/toon-format/spec.git
 [submodule "js"]
 	path = js
