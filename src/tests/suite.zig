@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
-const ztoon = @import("ztoon");
+const ztoon = @import("toonz");
 
 comptime {
     _ = @import("basic.zig");

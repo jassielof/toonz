@@ -3,20 +3,21 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const name: []const u8 = "toonz";
 
-    const mod = b.addModule("ztoon", .{
+    const mod = b.addModule(name, .{
         .root_source_file = b.path("src/lib/root.zig"),
         .target = target,
     });
 
     const exe = b.addExecutable(.{
-        .name = "ztoon",
+        .name = name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/cli/main.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "ztoon", .module = mod },
+                .{ .name = name, .module = mod },
             },
         }),
     });
@@ -42,7 +43,7 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("docs", "Generate documentation");
     docs_step.dependOn(&docs.step);
 
-    const tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("src/tests/suite.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = "ztoon", .module = mod }} }) });
+    const tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("src/tests/suite.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = name, .module = mod }} }) });
     const run_tests = b.addRunArtifact(tests);
 
     const test_step = b.step("test", "Run tests");

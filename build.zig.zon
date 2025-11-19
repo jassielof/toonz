@@ -1,7 +1,7 @@
 .{
-    .name = .ztoon,
+    .name = .toonz,
     .version = "2.0.0",
-    .fingerprint = 0x9af98f92c3598d31,
+    .fingerprint = 0xa110045117624106,
     .minimum_zig_version = "0.15.2",
     .dependencies = .{},
     .paths = .{

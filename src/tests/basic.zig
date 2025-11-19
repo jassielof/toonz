@@ -1,6 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
-const ztoon = @import("ztoon");
+const ztoon = @import("toonz");
 
 const toon_sample =
     \\context:
