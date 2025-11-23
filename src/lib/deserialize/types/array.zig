@@ -1,10 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Scanner = @import("../../Scanner.zig");
+const Scanner = @import("../Scanner.zig");
 const Context = @import("../Context.zig");
 const parseFieldValue = @import("value.zig").parseFieldValue;
 const parsePrimitiveValue = @import("value.zig").parsePrimitiveValue;
-const fieldMatches = @import("../../utils/field.zig").fieldMatches;
+const fieldMatches = @import("../../utils/case.zig").fieldCaseMatches;
 
 pub fn parseTabularArray(
     comptime T: type,

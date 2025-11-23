@@ -1,6 +1,11 @@
 const std = @import("std");
 
-pub const TestOptions = struct {
+version: []const u8,
+category: []const u8,
+description: []const u8,
+tests: []Case,
+
+pub const Options = struct {
     delimiter: ?[]const u8 = null,
     indent: ?u64 = null,
     strict: ?bool = null,
@@ -9,20 +14,13 @@ pub const TestOptions = struct {
     expandPaths: ?[]const u8 = null,
 };
 
-pub const TestCase = struct {
+pub const Case = struct {
     name: []const u8,
     input: std.json.Value,
     expected: std.json.Value,
     shouldError: bool = false,
-    options: ?TestOptions = null,
+    options: ?Options = null,
     specSection: ?[]const u8 = null,
     note: ?[]const u8 = null,
     minSpecVersion: ?[]const u8 = null,
-};
-
-pub const Fixtures = struct {
-    version: []const u8,
-    category: []const u8,
-    description: []const u8,
-    tests: []TestCase,
 };

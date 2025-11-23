@@ -1,4 +1,4 @@
-const Options = @This();
+//! Options for parsing TOON
 
 /// Number of spaces to use for indentation.
 indent: usize = 2,

@@ -1,8 +1,8 @@
+//! TOON (Token-Oriented Object Notation) parsing, stringification, and formatting.
+//!
+
 const std = @import("std");
 
-const constants = @import("constants.zig");
+const deserialize = @import("deserialize/root.zig");
+pub const Parse = deserialize.Parse;
 
-pub const types = @import("types.zig");
-
-pub const Parse = @import("Parse.zig");
-pub const Stringify = @import("Stringify.zig");

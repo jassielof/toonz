@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+
 /// Converts snake_case to camelCase
 pub fn snakeToCamel(allocator: Allocator, snake: []const u8) ![]const u8 {
     if (snake.len == 0) return try allocator.dupe(u8, snake);
@@ -41,4 +42,16 @@ pub fn camelToSnake(allocator: Allocator, camel: []const u8) ![]const u8 {
     }
 
     return result.toOwnedSlice();
+}
+
+/// Checks if a TOON key matches a Zig field name (handles case conversion)
+pub fn fieldCaseMatches(toon_key: []const u8, field_name: []const u8, allocator: Allocator) !bool {
+    // Direct match
+    if (std.mem.eql(u8, toon_key, field_name)) return true;
+
+    // Try converting field_name to camelCase and compare
+    const camel = try snakeToCamel(allocator, field_name);
+    defer allocator.free(camel);
+
+    return std.mem.eql(u8, toon_key, camel);
 }

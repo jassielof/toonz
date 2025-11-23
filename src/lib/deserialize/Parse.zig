@@ -1,5 +1,4 @@
 //! Writes TOON formatted data to a stream
-const assert = std.debug.assert;
 
 const std = @import("std");
 const Parse = @This();
@@ -8,12 +7,13 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const Reader = std.Io.Reader;
 const Allocator = std.mem.Allocator;
 pub const Scanner = @import("Scanner.zig");
-const Context = @import("parser/Context.zig");
-const Options = @import("parser/Options.zig");
-const value = @import("parser/types/value.zig").parseValue;
-const parseFieldValue = @import("parser/types/value.zig").parseFieldValue;
-const fieldMatches = @import("utils/field.zig").fieldMatches;
+const Context = @import("Context.zig");
+const Options = @import("Options.zig");
+const value = @import("types/value.zig").parseValue;
+const parseFieldValue = @import("types/value.zig").parseFieldValue;
+const fieldMatches = @import("../utils/case.zig").fieldCaseMatches;
 
+/// Parse a tabular row into a struct of type T.
 fn parseTabularRow(
     comptime T: type,
     row: []const u8,
@@ -56,6 +56,7 @@ fn parseTabularRow(
     return result;
 }
 
+/// Internal parsing function
 fn internal(comptime T: type, allocator: Allocator, source: anytype, options: Options) !T {
     var scanner = try Scanner.init(allocator, source, options.indent);
     defer scanner.deinit();
@@ -69,11 +70,13 @@ fn internal(comptime T: type, allocator: Allocator, source: anytype, options: Op
     return try value(T, &scanner, 0, &ctx);
 }
 
+/// A parsed TOON document
 pub fn Parsed(comptime T: type) type {
     return struct {
         value: T,
         arena: *std.heap.ArenaAllocator,
 
+        /// Deinitialize the parsed document and free resources
         pub fn deinit(self: @This()) void {
             const child_allocator = self.arena.child_allocator;
             self.arena.deinit();

@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Parse a boolean value from a given content.
 pub fn parseBool(content: []const u8) !bool {
     const trimmed = std.mem.trim(u8, content, &std.ascii.whitespace);
     if (std.mem.eql(u8, trimmed, "true")) return true;

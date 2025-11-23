@@ -1,9 +1,9 @@
 const std = @import("std");
 const array = @import("array.zig");
 
-const fieldMatches = @import("../../utils/field.zig").fieldMatches;
+const fieldMatches = @import("../../utils/case.zig").fieldCaseMatches;
 const value = @import("value.zig");
-const Scanner = @import("../../Scanner.zig").Scanner;
+const Scanner = @import("../Scanner.zig");
 const Context = @import("../Context.zig");
 
 pub fn parseStruct(

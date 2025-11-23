@@ -1,21 +1,22 @@
+//! A simple line-based scanner for parsing TOON files.
+
 const std = @import("std");
-
-pub const Scanner = @This();
-
-const Writer = std.Io.Writer;
-const Reader = std.Io.Reader;
 const Allocator = std.mem.Allocator;
-const BitStack = std.BitStack;
+
+const Scanner = @This();
 
 lines: []Line,
 current_index: usize,
 allocator: Allocator,
 
+/// A single line in the TOON input
 pub const Line = struct {
     content: []const u8,
     indent: usize,
     number: usize,
 };
+
+/// Initialize a scanner from a source input
 pub fn init(allocator: Allocator, source: []const u8, expected_indent: usize) !Scanner {
     _ = expected_indent;
     var line_list = std.array_list.Managed(Line).init(allocator);
@@ -48,33 +49,48 @@ pub fn init(allocator: Allocator, source: []const u8, expected_indent: usize) !S
         .allocator = allocator,
     };
 }
+
+/// Deinitialize the scanner and free resources
 pub fn deinit(self: *Scanner) void {
     self.allocator.free(self.lines);
 }
+
+/// Peek at the current line without consuming it
 pub fn peek(self: *const Scanner) ?Line {
     if (self.current_index >= self.lines.len) return null;
     return self.lines[self.current_index];
 }
+
+/// Consume and return the current line
 pub fn next(self: *Scanner) ?Line {
     const line = self.peek() orelse return null;
     self.current_index += 1;
     return line;
 }
+
+/// Check if there are more lines to read
 pub fn hasMore(self: *const Scanner) bool {
     return self.current_index < self.lines.len;
 }
+
+/// Peek ahead n lines without consuming them
 pub fn peekAhead(self: *const Scanner, n: usize) ?Line {
     const index = self.current_index + n;
     if (index >= self.lines.len) return null;
     return self.lines[index];
 }
+
+/// Get the current position in the scanner
 pub fn position(self: *const Scanner) usize {
     return self.current_index;
 }
 
+/// Set the current position in the scanner
 pub fn setPosition(self: *Scanner, pos: usize) !void {
     self.current_index = pos;
 }
+
+/// Count leading spaces in a line
 fn countLeadingSpaces(line: []const u8) usize {
     var count: usize = 0;
     for (line) |c| {

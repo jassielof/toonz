@@ -1,14 +1,14 @@
 const std = @import("std");
-const types = @import("../../types.zig");
 const Allocator = std.mem.Allocator;
 const number = @import("number.zig");
 const parseStruct = @import("object.zig").parseStruct;
 const boolean = @import("boolean.zig");
 const isNull = @import("null.zig").isNull;
 const string = @import("string.zig");
-const Scanner = @import("../../Scanner.zig").Scanner;
+const Scanner = @import("../Scanner.zig");
 const Context = @import("../Context.zig");
 
+/// Parse a primitive value (int, float, bool, string) from a given content.
 pub fn parsePrimitiveValue(comptime T: type, val: []const u8, allocator: Allocator) !T {
     const type_info = @typeInfo(T);
 
@@ -26,6 +26,7 @@ pub fn parsePrimitiveValue(comptime T: type, val: []const u8, allocator: Allocat
     };
 }
 
+/// Parse a nested value (struct, array, etc.) from the scanner.
 pub fn parseNestedValue(
     comptime T: type,
     scanner: *Scanner,
@@ -40,6 +41,7 @@ pub fn parseNestedValue(
     return parseValue(T, scanner, next_line.indent, ctx);
 }
 
+/// Parse an inline value (int, float, bool, string, optional) from a given content.
 pub fn parseInlineValue(
     comptime T: type,
     content: []const u8,
@@ -67,13 +69,14 @@ pub fn parseInlineValue(
     };
 }
 
+/// Parse a value of type T from the scanner, handling both inline and nested values.
 pub fn parseValue(comptime T: type, scanner: *Scanner, base_indent: usize, ctx: *Context) !T {
     if (ctx.depth >= ctx.options.max_depth) return error.SyntaxError;
     ctx.depth += 1;
     defer ctx.depth -= 1;
     const type_info = @typeInfo(T);
 
-    if (T == types.JsonValue or T == std.json.Value) {
+    if (T == std.json.Value) {
         // Read the next line as the JSON string
         const line = scanner.peek() orelse return error.UnexpectedEof;
         _ = scanner.next();
@@ -125,6 +128,7 @@ pub fn parseValue(comptime T: type, scanner: *Scanner, base_indent: usize, ctx: 
     };
 }
 
+/// Parse individual fields of type T from the given content.
 pub fn parseFieldValue(comptime T: type, val: []const u8, allocator: Allocator) !T {
     const type_info = @typeInfo(T);
 

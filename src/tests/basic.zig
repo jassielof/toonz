@@ -2,7 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const toonz = @import("toonz");
 
-const @"toon.sample" = @embedFile("data/sample.toon");
+const @"sample.toon" = @embedFile("data/sample.toon");
 const @"sample.json" = @embedFile("data/sample.json");
 
 const Sample = struct { context: struct {
@@ -19,7 +19,7 @@ const Sample = struct { context: struct {
 } };
 
 test "Basic parsing" {
-    const parsed = try toonz.Parse.fromSlice(Sample, testing.allocator, @"toon.sample", .{});
+    const parsed = try toonz.Parse.fromSlice(Sample, testing.allocator, @"sample.toon", .{});
     defer parsed.deinit();
 
     const actual = parsed.value;
