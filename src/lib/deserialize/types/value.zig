@@ -7,6 +7,7 @@ const isNull = @import("null.zig").isNull;
 const string = @import("string.zig");
 const Scanner = @import("../Scanner.zig");
 const Context = @import("../Context.zig");
+const Value = @import("../../Value.zig").Value;
 
 /// Parse a primitive value (int, float, bool, string) from a given content.
 pub fn parsePrimitiveValue(comptime T: type, val: []const u8, allocator: Allocator) !T {
@@ -117,8 +118,131 @@ pub fn parseValue(comptime T: type, scanner: *Scanner, base_indent: usize, ctx: 
             }
             break :blk try parseValue(opt.child, scanner, base_indent, ctx);
         },
+        .@"union" => |u| blk: {
+            // Check if this is our Value type
+            if (u.tag_type != null and T == Value) {
+                break :blk try parseDynamicValue(scanner, base_indent, ctx);
+            }
+            @compileError("Cannot parse union type: " ++ @typeName(T));
+        },
         else => @compileError("Cannot parse type: " ++ @typeName(T)),
     };
+}
+
+/// Parse a dynamic value (TOONZ Value type) from the scanner.
+fn parseDynamicValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!Value {
+    const line = scanner.peek() orelse return .null;
+
+    // Check if this is an object or array by looking at the structure
+    // If the current line has a key:value format, it's likely an object/array field
+    // If the next line is indented, it's a nested structure
+
+    const content = std.mem.trim(u8, line.content, " \t");
+
+    // Check for null
+    if (isNull(content)) {
+        _ = scanner.next();
+        return .null;
+    }
+
+    // Check for boolean
+    if (boolean.parseBool(content)) |b| {
+        _ = scanner.next();
+        return .{ .bool = b };
+    } else |_| {}
+
+    // Check for number
+    if (number.parseInt(i64, content)) |i| {
+        _ = scanner.next();
+        return .{ .integer = i };
+    } else |_| {}
+
+    if (number.parseFloat(f64, content)) |f| {
+        _ = scanner.next();
+        return .{ .float = f };
+    } else |_| {}
+
+    // Check if there's a next line that's indented (nested structure)
+    const peek_next = scanner.peekAhead(1);
+    if (peek_next) |next| {
+        if (next.indent > base_indent) {
+            // This is a nested structure, could be object or array
+            // We need to parse it as an object
+            _ = scanner.next();
+            return try parseDynamicObject(scanner, base_indent, ctx);
+        }
+    }
+
+    // Otherwise, it's a string
+    _ = scanner.next();
+    const str = try string.parseString(content, ctx.allocator);
+    return .{ .string = str };
+}
+
+/// Parse a dynamic object (for Value type)
+fn parseDynamicObject(scanner: *Scanner, parent_indent: usize, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!Value {
+    var object = Value.Object.init(ctx.allocator);
+    errdefer {
+        var it = object.iterator();
+        while (it.next()) |entry| {
+            ctx.allocator.free(entry.key_ptr.*);
+            entry.value_ptr.deinit(ctx.allocator);
+        }
+        object.deinit();
+    }
+
+    while (scanner.peek()) |line| {
+        if (line.indent <= parent_indent) break;
+        if (line.indent != parent_indent + ctx.options.indent) continue;
+
+        _ = scanner.next();
+
+        // Parse key-value pair
+        const colon_pos = std.mem.indexOf(u8, line.content, ":") orelse continue;
+        const key_str = std.mem.trim(u8, line.content[0..colon_pos], " \t");
+        const key = try ctx.allocator.dupe(u8, key_str);
+        errdefer ctx.allocator.free(key);
+
+        const value_str = std.mem.trim(u8, line.content[colon_pos + 1 ..], " \t");
+
+        // Check if value is inline or nested
+        var val: Value = undefined;
+        if (value_str.len > 0) {
+            // Inline value
+            if (isNull(value_str)) {
+                val = .null;
+            } else if (boolean.parseBool(value_str)) |b| {
+                val = .{ .bool = b };
+            } else |_| {
+                if (number.parseInt(i64, value_str)) |i| {
+                    val = .{ .integer = i };
+                } else |_| {
+                    if (number.parseFloat(f64, value_str)) |f| {
+                        val = .{ .float = f };
+                    } else |_| {
+                        const str = try string.parseString(value_str, ctx.allocator);
+                        val = .{ .string = str };
+                    }
+                }
+            }
+        } else {
+            // Nested value
+            const peek_next = scanner.peek();
+            if (peek_next) |next| {
+                if (next.indent > line.indent) {
+                    val = try parseDynamicValue(scanner, line.indent, ctx);
+                } else {
+                    val = .null;
+                }
+            } else {
+                val = .null;
+            }
+        }
+
+        try object.put(key, val);
+    }
+
+    return .{ .object = object };
 }
 
 /// Parse individual fields of type T from the given content.

@@ -31,13 +31,12 @@ test "Basic parsing with fixed schema" {
 }
 
 test "Basic parsing with variable schema" {
-    // FIXME: TOONZ should have its own JSON-compatible value, similar to std.json.Value, in the meantime std.json.Value will be used for reference.
-    const parsed = try toonz.Parse.fromSlice(std.json.Value, testing.allocator, @"sample.toon", .{});
+    const parsed = try toonz.Parse.fromSlice(toonz.Value, testing.allocator, @"sample.toon", .{});
     defer parsed.deinit();
 
     const parsed_val = parsed.value;
 
-    std.debug.print("{any}", .{parsed_val});
+    std.debug.print("{any}\n", .{parsed_val});
 }
 
 test "Basic stringifying with fixed schema" {}
