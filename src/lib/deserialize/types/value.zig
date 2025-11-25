@@ -77,11 +77,6 @@ pub fn parseValue(comptime T: type, scanner: *Scanner, base_indent: usize, ctx: 
     const type_info = @typeInfo(T);
 
     if (T == std.json.Value) {
-        // Read the next line as the JSON string
-        const line = scanner.peek() orelse return error.UnexpectedEof;
-        _ = scanner.next();
-        // Parse using std.json
-        return try std.json.parseFromSlice(T, ctx.allocator, line.content, .{});
     }
     return switch (type_info) {
         .@"struct" => try parseStruct(T, scanner, base_indent, ctx),

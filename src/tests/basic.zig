@@ -18,7 +18,7 @@ const Sample = struct { context: struct {
     wasSunny: bool,
 } };
 
-test "Basic parsing" {
+test "Basic parsing with fixed schema" {
     const parsed = try toonz.Parse.fromSlice(Sample, testing.allocator, @"sample.toon", .{});
     defer parsed.deinit();
 
@@ -30,4 +30,4 @@ test "Basic parsing" {
     try testing.expectEqualDeep(expected.value, actual);
 }
 
-test "Basic stringifying" {}
+test "Basic stringifying with fixed schema" {}

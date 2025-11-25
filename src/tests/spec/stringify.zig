@@ -15,12 +15,13 @@ test "Stringify specification fixtures" {
         const fixture = try std.json.parseFromValue(types.Fixtures, allocator, entry.value_ptr.*, .{});
         defer fixture.deinit();
 
-        std.debug.print("Description: {s}\n", .{fixture.value.description});
+        // std.debug.print("Description: {s}\n", .{fixture.value.description});
 
         for (fixture.value.tests, 0..) |test_case, i| {
-            std.debug.print("\tTest {}: {s}\n", .{ i + 1, test_case.name });
-
-            std.debug.print("\tInput:\n{any}\n", .{test_case.input.object});
+            // std.debug.print("\tTest {}: {s}\n", .{ i + 1, test_case.name });
+            _ = test_case;
+            _ = i;
+            // std.debug.print("\tInput:\n{any}\n", .{test_case.input.object});
         }
     }
 }

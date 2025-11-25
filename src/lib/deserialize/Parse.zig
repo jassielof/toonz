@@ -100,3 +100,10 @@ pub fn fromSlice(comptime T: type, allocator: Allocator, input: []const u8, opti
         .arena = arena_ptr,
     };
 }
+
+pub fn fromValue(comptime T: type, allocator: Allocator, val: anytype, options: Options) !Parsed(T) {
+    _ = allocator;
+    _ = val;
+    _ = options;
+    return error.Unimplemented;
+}

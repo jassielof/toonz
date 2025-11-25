@@ -1,7 +1,9 @@
 const std = @import("std");
 
 /// Loads all JSON files from a directory into a StringHashMap.
-/// Caller owns the returned map and must call deinit() on it.
+///
+/// The caller will own the returned map and must deinitialize it when done.
+/// 
 /// Uses the provided allocator for all allocations.
 pub fn loadJsonFixtures(
     allocator: std.mem.Allocator,
