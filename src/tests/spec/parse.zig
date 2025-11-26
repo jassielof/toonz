@@ -21,10 +21,14 @@ test "Parse specification fixtures" {
             std.debug.print("- Test {}: {s}\n", .{ i + 1, test_case.name });
 
             std.debug.print("Input:\n{s}\n", .{test_case.input.string});
+            std.debug.print("Should throw error?: {any}\n", .{test_case.shouldError});
 
-            // FIXME: There must be compatibility with the JSON data model (for reference Zig's std.json.Value).
-            // const parsed_toon = try toonz.Parse.fromSlice(std.json.Value, allocator, test_case.input.string, .{});
-            // defer parsed_toon.deinit();
+            if (test_case.shouldError) {
+                continue;
+            } else {
+                const parsed_toon = try toonz.Parse.fromSlice(toonz.Value, allocator, test_case.input.string, .{});
+                std.debug.print("{any}\n", .{parsed_toon});
+            }
         }
     }
 }

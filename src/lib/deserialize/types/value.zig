@@ -134,7 +134,48 @@ pub fn parseValue(comptime T: type, scanner: *Scanner, base_indent: usize, ctx: 
 }
 
 /// Parse a dynamic value (TOONZ Value type) from the scanner.
-fn parseDynamicValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!Value {
+fn parseDynamicValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allocator.Error || error{ InvalidEscapeSequence, TypeMismatch })!Value {
+    // Root form detection (§5): only applies at depth 0
+    if (base_indent == 0) {
+        // Check for empty document
+        const first_line = scanner.peek() orelse {
+            // Empty document → empty object
+            return .{ .object = Value.Object.init(ctx.allocator) };
+        };
+
+        // Check for root array header: [N]:
+        if (first_line.content.len > 0 and first_line.content[0] == '[') {
+            if (std.mem.indexOfScalar(u8, first_line.content, ':')) |colon_pos| {
+                const before_colon = first_line.content[0..colon_pos];
+                if (std.mem.indexOfScalar(u8, before_colon, ']')) |_| {
+                    // This is a root array header [N]:
+                    // Parse it as an array wrapped in an object
+                    // For now, return error as arrays need special handling
+                    // TODO: Implement root array parsing
+                    return error.TypeMismatch;
+                }
+            }
+        }
+
+        // Check for single primitive (exactly one line, no colon)
+        if (std.mem.indexOfScalar(u8, first_line.content, ':') == null) {
+            // Count total non-empty lines
+            var line_count: usize = 0;
+            var temp_scanner = scanner.*;
+            while (temp_scanner.peek()) |_| {
+                line_count += 1;
+                _ = temp_scanner.next();
+            }
+
+            if (line_count == 1) {
+                // Single primitive
+                _ = scanner.next();
+                const content = std.mem.trim(u8, first_line.content, " \t");
+                return try parseSinglePrimitive(content, ctx);
+            }
+        }
+    }
+
     const line = scanner.peek() orelse return .null;
 
     // If this line has a colon, it's an object (key-value structure)
@@ -169,6 +210,26 @@ fn parseDynamicValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allo
 
     // Otherwise, it's a string
     _ = scanner.next();
+    const str = try string.parseString(content, ctx.allocator);
+    return .{ .string = str };
+}
+
+/// Parse a single primitive value (for root form detection)
+fn parseSinglePrimitive(content: []const u8, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!Value {
+    if (isNull(content)) return .null;
+
+    if (boolean.parseBool(content)) |b| {
+        return .{ .bool = b };
+    } else |_| {}
+
+    if (number.parseInt(i64, content)) |i| {
+        return .{ .integer = i };
+    } else |_| {}
+
+    if (number.parseFloat(f64, content)) |f| {
+        return .{ .float = f };
+    } else |_| {}
+
     const str = try string.parseString(content, ctx.allocator);
     return .{ .string = str };
 }
@@ -292,7 +353,48 @@ fn parseDynamicNestedValue(scanner: *Scanner, parent_indent: usize, ctx: *Contex
 }
 
 /// Parse a std.json.Value from the scanner.
-fn parseStdJsonValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!std.json.Value {
+fn parseStdJsonValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allocator.Error || error{ InvalidEscapeSequence, TypeMismatch })!std.json.Value {
+    // Root form detection (§5): only applies at depth 0
+    if (base_indent == 0) {
+        // Check for empty document
+        const first_line = scanner.peek() orelse {
+            // Empty document → empty object
+            return .{ .object = std.json.ObjectMap.init(ctx.allocator) };
+        };
+
+        // Check for root array header: [N]:
+        if (first_line.content.len > 0 and first_line.content[0] == '[') {
+            if (std.mem.indexOfScalar(u8, first_line.content, ':')) |colon_pos| {
+                const before_colon = first_line.content[0..colon_pos];
+                if (std.mem.indexOfScalar(u8, before_colon, ']')) |_| {
+                    // This is a root array header [N]:
+                    // Parse it as an array
+                    // For now, return error as arrays need special handling
+                    // TODO: Implement root array parsing
+                    return error.TypeMismatch;
+                }
+            }
+        }
+
+        // Check for single primitive (exactly one line, no colon)
+        if (std.mem.indexOfScalar(u8, first_line.content, ':') == null) {
+            // Count total non-empty lines
+            var line_count: usize = 0;
+            var temp_scanner = scanner.*;
+            while (temp_scanner.peek()) |_| {
+                line_count += 1;
+                _ = temp_scanner.next();
+            }
+
+            if (line_count == 1) {
+                // Single primitive
+                _ = scanner.next();
+                const content = std.mem.trim(u8, first_line.content, " \t");
+                return try parseStdJsonSinglePrimitive(content, ctx);
+            }
+        }
+    }
+
     const line = scanner.peek() orelse return .null;
 
     // If this line has a colon, it's an object (key-value structure)
@@ -327,6 +429,26 @@ fn parseStdJsonValue(scanner: *Scanner, base_indent: usize, ctx: *Context) (Allo
 
     // Otherwise, it's a string
     _ = scanner.next();
+    const str = try string.parseString(content, ctx.allocator);
+    return .{ .string = str };
+}
+
+/// Parse a single primitive value for std.json.Value (for root form detection)
+fn parseStdJsonSinglePrimitive(content: []const u8, ctx: *Context) (Allocator.Error || error{InvalidEscapeSequence})!std.json.Value {
+    if (isNull(content)) return .null;
+
+    if (boolean.parseBool(content)) |b| {
+        return .{ .bool = b };
+    } else |_| {}
+
+    if (number.parseInt(i64, content)) |i| {
+        return .{ .integer = i };
+    } else |_| {}
+
+    if (number.parseFloat(f64, content)) |_| {
+        return .{ .number_string = try ctx.allocator.dupe(u8, content) };
+    } else |_| {}
+
     const str = try string.parseString(content, ctx.allocator);
     return .{ .string = str };
 }

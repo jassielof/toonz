@@ -18,7 +18,7 @@ test "Stringify specification fixtures" {
 
         for (fixture.value.tests, 0..) |test_case, i| {
             std.debug.print("- Test {}: {s}\n", .{ i + 1, test_case.name });
-            std.debug.print("Input:\n{f}\n", .{std.json.fmt(test_case.input, .{})});
+            // std.debug.print("Input:\n{f}\n", .{std.json.fmt(test_case.input, .{})});
         }
     }
 }
