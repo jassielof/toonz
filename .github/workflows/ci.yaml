@@ -30,13 +30,13 @@ jobs:
           brew install zig
 
       - name: Build
-        run: zig build
+        run: zig build --summary all
 
       - name: Test
-        run: zig build test
+        run: zig build --summary all test
 
       - name: Build docs
-        run: zig build docs
+        run: zig build --summary all docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@main
