@@ -175,7 +175,8 @@ pub fn parseArray(
             if (next_line.indent > base_indent) {
                 // Check if it starts with "- " (list format)
                 if (std.mem.startsWith(u8, next_line.content, "- ") or
-                    std.mem.eql(u8, next_line.content, "-")) {
+                    std.mem.eql(u8, next_line.content, "-"))
+                {
                     return try parseListArray(T, header, scanner, base_indent, allocator);
                 }
             }

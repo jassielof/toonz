@@ -66,7 +66,6 @@ pub fn normalizeJsonValue(allocator: Allocator, json_value: std.json.Value) Allo
 }
 
 /// Type guards for checking value types
-
 pub fn isJsonPrimitive(value: Value) bool {
     return switch (value) {
         .null, .bool, .integer, .float, .number_string, .string => true,
@@ -87,7 +86,6 @@ pub fn isEmptyObject(value: Value.Object) bool {
 }
 
 /// Array type detection
-
 pub fn isArrayOfPrimitives(arr: Value.Array) bool {
     if (arr.items.len == 0) return true;
     for (arr.items) |item| {
