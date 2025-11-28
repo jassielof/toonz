@@ -1,6 +1,5 @@
 const std = @import("std");
 const testing = std.testing;
-const utils = @import("utils.zig");
 const Fixture = @import("Fixture.zig");
 
 test "Stringify specification fixtures" {
@@ -8,7 +7,7 @@ test "Stringify specification fixtures" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const fixtures = try utils.loadJsonFixtures(allocator, "spec/tests/fixtures/encode/");
+    const fixtures = try Fixture.loadJsonFixtures(allocator, "spec/tests/fixtures/encode/");
 
     var fxt_it = fixtures.iterator();
     while (fxt_it.next()) |entry| {

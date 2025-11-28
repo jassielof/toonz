@@ -1,6 +1,5 @@
 const std = @import("std");
 const testing = std.testing;
-const utils = @import("utils.zig");
 const toonz = @import("toonz");
 const Fixture = @import("Fixture.zig");
 
@@ -9,12 +8,11 @@ test "Parse specification fixtures" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const fixture_files = try utils.loadJsonFixtures(allocator, "spec/tests/fixtures/decode");
+    const fixture_files = try Fixture.loadFromDir(allocator, "spec/tests/fixtures/decode");
 
     var fxt_it = fixture_files.iterator();
     while (fxt_it.next()) |entry| {
         const fixture = try std.json.parseFromValue(Fixture, allocator, entry.value_ptr.*, .{});
-
 
         std.debug.print("Description: {s}\n", .{fixture.value.description});
 
