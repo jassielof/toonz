@@ -1,8 +1,8 @@
 //! Options for parsing TOON
 
-// FIXME: Should be optional and u64
 /// Number of spaces to use for indentation.
-indent: usize = 2,
+/// Defaults to 2 if not specified (per spec §13).
+indent: ?usize = null,
 
 /// Whether to enforce strict validation for array lengths and tabular row counts.
 strict: ?bool = true,
@@ -14,6 +14,6 @@ strict: ?bool = true,
 /// It pairs with key folding set to safe for lossless round-trips.
 expand_paths: enum { off, safe } = .off,
 
-// FIXME: I don't know why max depth exists here compared to TypeScript's implementation
-/// Maximum depth
+/// Maximum parsing depth to prevent stack overflow from malicious input, which is a safety measure not present in the specification and main implementation (made in TS which relies on JS's native stack limits).
+/// Defaults to 256 levels of nesting.
 max_depth: usize = 256,

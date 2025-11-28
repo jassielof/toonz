@@ -60,7 +60,8 @@ fn parseTabularRow(
 
 /// Internal parsing function
 fn internal(comptime T: type, allocator: Allocator, source: anytype, options: Options) !T {
-    var scanner = try Scanner.init(allocator, source, options.indent);
+    const indent = options.indent orelse 2;
+    var scanner = try Scanner.init(allocator, source, indent);
     defer scanner.deinit();
 
     // Strict mode indentation validation (§14.3)
@@ -72,7 +73,7 @@ fn internal(comptime T: type, allocator: Allocator, source: anytype, options: Op
 
         // Check for non-multiple indentation
         for (scanner.lines) |line| {
-            if (line.indent > 0 and line.indent % options.indent != 0) {
+            if (line.indent > 0 and line.indent % indent != 0) {
                 return error.SyntaxError;
             }
         }

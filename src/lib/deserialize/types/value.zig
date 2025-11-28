@@ -323,6 +323,7 @@ fn parseRootArray(scanner: *Scanner, ctx: *Context) (Allocator.Error || error{ I
 }
 
 /// Parse a list item object from a hyphen line and subsequent fields
+/// Per spec v3.0 §10: handles tabular arrays as first field with special indentation
 fn parseListItemObject(hyphen_line: []const u8, scanner: *Scanner, item_indent: usize, ctx: *Context) (Allocator.Error || error{ InvalidEscapeSequence, SyntaxError, InvalidArrayLength })!Value.Object {
     // Extract content after "- "
     const after_hyphen = hyphen_line[2..]; // Skip "- "
@@ -343,43 +344,184 @@ fn parseListItemObject(hyphen_line: []const u8, scanner: *Scanner, item_indent: 
         obj.deinit();
     }
 
-    // Add the first field
-    const key = try ctx.allocator.dupe(u8, first_key);
-    const value = if (first_value_str.len > 0)
-        try parsePrimitiveToValue(first_value_str, ctx)
-    else
-        .null;
-    try obj.put(key, value);
+    // Check if first field is a tabular array header: key[N]{fields}:
+    // Per spec v3.0 §10: tabular arrays as first field have special encoding
+    const has_bracket = std.mem.indexOfScalar(u8, first_key, '[') != null;
+    const has_brace = std.mem.indexOfScalar(u8, first_key, '{') != null;
+    const is_tabular_header = has_bracket and has_brace and first_value_str.len == 0;
 
-    // Parse remaining fields at item_indent + 2 (one level deeper than hyphen)
-    const field_indent = item_indent + 2;
-    while (scanner.peek()) |line| {
-        // Stop if we've dedented back to or below item level
-        if (line.indent <= item_indent) break;
+    if (is_tabular_header) {
+        // Parse tabular array header from the hyphen line
+        const header = try array.parseArrayHeader(trimmed, ctx.allocator);
+        defer header.deinit(ctx.allocator);
 
-        // Only process fields at the expected field indentation
-        if (line.indent != field_indent) {
-            _ = scanner.next();
-            continue;
+        if (header.fields == null) {
+            return error.SyntaxError; // Tabular header must have fields
         }
 
-        // Parse key-value pair
-        const field_colon_pos = std.mem.indexOf(u8, line.content, ":") orelse {
-            break; // No colon, end of object fields
-        };
+        const fields = header.fields.?;
+        const indent_size = ctx.options.indent orelse 2;
+        const row_indent = item_indent + (2 * indent_size); // Rows at depth +2 per spec §10
+        const field_indent = item_indent + indent_size; // Sibling fields at depth +1 per spec §10
+        var items = std.array_list.Managed(Value).init(ctx.allocator);
+        errdefer {
+            for (items.items) |*item| {
+                item.deinit(ctx.allocator);
+            }
+            items.deinit();
+        }
 
-        const key_str = std.mem.trim(u8, line.content[0..field_colon_pos], " \t");
-        const value_str = std.mem.trim(u8, line.content[field_colon_pos + 1 ..], " \t");
+        var count: usize = 0;
+        var first_row_line: usize = 0;
+        var last_row_line: usize = 0;
 
-        _ = scanner.next();
+        // Parse tabular rows at depth +2 (relative to hyphen line)
+        // Per spec §10: rows are at d+2, sibling fields are at d+1
+        while (count < header.length) {
+            const next_line = scanner.peek() orelse break;
 
-        // Add field to object
-        const field_key = try ctx.allocator.dupe(u8, key_str);
-        const field_value = if (value_str.len > 0)
-            try parsePrimitiveToValue(value_str, ctx)
+            // Stop if we've dedented back to or below item level
+            if (next_line.indent <= item_indent) break;
+
+            // Rows must be at row_indent (depth +2 relative to hyphen)
+            if (next_line.indent == row_indent) {
+                // This is a tabular row (no colon in row content)
+                if (first_row_line == 0) first_row_line = next_line.number;
+                last_row_line = next_line.number;
+
+                // Parse the row using delimiter-aware splitting
+                const delim_char = header.delimiter.char();
+                const row_values = try parseDelimitedValues(next_line.content, delim_char, ctx.allocator);
+                defer {
+                    for (row_values) |rv| {
+                        ctx.allocator.free(rv);
+                    }
+                    ctx.allocator.free(row_values);
+                }
+
+                // Validate row width matches field count
+                if (row_values.len != fields.len) {
+                    return error.SyntaxError;
+                }
+
+                // Create object from fields and values
+                var row_obj = Value.Object.init(ctx.allocator);
+                errdefer {
+                    var it = row_obj.iterator();
+                    while (it.next()) |entry| {
+                        ctx.allocator.free(entry.key_ptr.*);
+                        entry.value_ptr.deinit(ctx.allocator);
+                    }
+                    row_obj.deinit();
+                }
+
+                for (fields, 0..) |field, fi| {
+                    const field_key = try ctx.allocator.dupe(u8, field);
+                    const field_value = try parsePrimitiveToValue(row_values[fi], ctx);
+                    try row_obj.put(field_key, field_value);
+                }
+
+                try items.append(.{ .object = row_obj });
+                _ = scanner.next();
+                count += 1;
+            } else if (next_line.indent == field_indent) {
+                // This is a sibling field at depth +1, rows are done
+                break;
+            } else {
+                // Different indentation - might be deeper nested content, skip
+                _ = scanner.next();
+                continue;
+            }
+        }
+
+        // Verify count matches header
+        if (count != header.length) {
+            return error.SyntaxError;
+        }
+
+        // Strict mode: check for blank lines inside array (§14.4)
+        if (ctx.options.strict orelse true) {
+            if (first_row_line > 0 and last_row_line > first_row_line) {
+                if (scanner.hasBlankLinesBetween(first_row_line, last_row_line + 1)) {
+                    return error.SyntaxError;
+                }
+            }
+        }
+
+        // Convert to array and add to object
+        const owned_slice = try items.toOwnedSlice();
+        const result = std.ArrayList(Value){ .items = owned_slice, .capacity = owned_slice.len };
+        const array_key = try ctx.allocator.dupe(u8, header.key orelse "");
+        try obj.put(array_key, .{ .array = result });
+
+        // Parse remaining fields at depth +1 (relative to hyphen line)
+        while (scanner.peek()) |line| {
+            // Stop if we've dedented back to or below item level
+            if (line.indent <= item_indent) break;
+
+            // Only process fields at the expected field indentation
+            if (line.indent != field_indent) {
+                _ = scanner.next();
+                continue;
+            }
+
+            // Parse key-value pair
+            const field_colon_pos = std.mem.indexOf(u8, line.content, ":") orelse {
+                break; // No colon, end of object fields
+            };
+
+            const key_str = std.mem.trim(u8, line.content[0..field_colon_pos], " \t");
+            const value_str = std.mem.trim(u8, line.content[field_colon_pos + 1 ..], " \t");
+
+            _ = scanner.next();
+
+            // Add field to object
+            const field_key = try ctx.allocator.dupe(u8, key_str);
+            const field_value = if (value_str.len > 0)
+                try parsePrimitiveToValue(value_str, ctx)
+            else
+                .null;
+            try obj.put(field_key, field_value);
+        }
+    } else {
+        // Regular first field (not a tabular array)
+        const key = try ctx.allocator.dupe(u8, first_key);
+        const value = if (first_value_str.len > 0)
+            try parsePrimitiveToValue(first_value_str, ctx)
         else
             .null;
-        try obj.put(field_key, field_value);
+        try obj.put(key, value);
+
+        // Parse remaining fields at item_indent + 2 (one level deeper than hyphen)
+        const field_indent = item_indent + 2;
+        while (scanner.peek()) |line| {
+            // Stop if we've dedented back to or below item level
+            if (line.indent <= item_indent) break;
+
+            // Only process fields at the expected field indentation
+            if (line.indent != field_indent) {
+                _ = scanner.next();
+                continue;
+            }
+
+            // Parse key-value pair
+            const field_colon_pos = std.mem.indexOf(u8, line.content, ":") orelse {
+                break; // No colon, end of object fields
+            };
+
+            const key_str = std.mem.trim(u8, line.content[0..field_colon_pos], " \t");
+            const value_str = std.mem.trim(u8, line.content[field_colon_pos + 1 ..], " \t");
+
+            _ = scanner.next();
+
+            // Add field to object
+            const field_key = try ctx.allocator.dupe(u8, key_str);
+            const field_value = if (value_str.len > 0)
+                try parsePrimitiveToValue(value_str, ctx)
+            else
+                .null;
+            try obj.put(field_key, field_value);
+        }
     }
 
     return obj;
