@@ -7,7 +7,7 @@ test "Stringify specification fixtures" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const fixtures = try Fixture.loadJsonFixtures(allocator, "spec/tests/fixtures/encode/");
+    const fixtures = try Fixture.loadFromDir(allocator, "spec/tests/fixtures/encode/");
 
     var fxt_it = fixtures.iterator();
     while (fxt_it.next()) |entry| {

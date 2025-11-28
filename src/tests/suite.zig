@@ -8,7 +8,7 @@ comptime {
     _ = @import("reference/json.zig");
     _ = @import("json.zig");
     _ = @import("spec/parse.zig");
-    // _ = @import("spec/stringify.zig");
+    _ = @import("spec/stringify.zig");
 }
 
 test {
