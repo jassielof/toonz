@@ -1,9 +1,73 @@
 //! TOON formatter, similar to std.json.fmt
 //! Provides a formatter that can be used with the {f} format specifier.
+//! Also provides high-level functions to parse and re-format TOON content.
 
 const std = @import("std");
 const Value = @import("../Value.zig").Value;
 const Options = @import("../serialize/Options.zig");
+const Parse = @import("../deserialize/Parse.zig");
+const encoders = @import("../serialize/encoders.zig");
+
+/// Format options for the formatter (re-export from serialize Options)
+pub const FormatOptions = Options;
+
+/// Formats TOON input content and returns the formatted output.
+/// Parses the input as TOON and re-serializes it with the given options.
+pub fn formatToon(
+    input: []const u8,
+    options: FormatOptions,
+    allocator: std.mem.Allocator,
+) ![]const u8 {
+    // Parse the TOON content into a Value
+    const parsed = try Parse.fromSlice(Value, allocator, input, .{});
+    defer parsed.deinit();
+
+    // Format the value to a string using the working serialize encoders
+    var list = std.array_list.Managed(u8).init(allocator);
+    errdefer list.deinit();
+
+    encoders.encodeValue(parsed.value, options, list.writer(), 0, allocator) catch |err| switch (err) {
+        error.InvalidType => return error.OutOfMemory,
+        else => |e| return e,
+    };
+
+    return try list.toOwnedSlice();
+}
+
+/// Formats TOON input and writes to a writer.
+pub fn formatToonToWriter(
+    input: []const u8,
+    options: FormatOptions,
+    writer: anytype,
+    allocator: std.mem.Allocator,
+) !void {
+    // Parse the TOON content into a Value
+    const parsed = try Parse.fromSlice(Value, allocator, input, .{});
+    defer parsed.deinit();
+
+    // Format the value to the writer using the working serialize encoders
+    encoders.encodeValue(parsed.value, options, writer, 0, allocator) catch |err| switch (err) {
+        error.InvalidType => return error.OutOfMemory,
+        else => |e| return e,
+    };
+}
+
+/// Formats a Value and returns the formatted output as an allocated string.
+pub fn formatValueToString(
+    value: Value,
+    options: FormatOptions,
+    allocator: std.mem.Allocator,
+) ![]const u8 {
+    var list = std.array_list.Managed(u8).init(allocator);
+    errdefer list.deinit();
+
+    encoders.encodeValue(value, options, list.writer(), 0, allocator) catch |err| switch (err) {
+        error.InvalidType => return error.OutOfMemory,
+        else => |e| return e,
+    };
+
+    return try list.toOwnedSlice();
+}
 
 /// Returns a formatter for the given value and options.
 /// Similar to std.json.fmt, this can be used with the {f} format specifier.

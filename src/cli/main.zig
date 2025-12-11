@@ -31,8 +31,9 @@ pub fn main() !void {
             defer freeCommandStrings(cmd, allocator);
             try deserialize_cmd.run(cmd, allocator);
         },
-        .format => {
-            try format_cmd.run(allocator);
+        .format => |cmd| {
+            defer freeCommandStrings(cmd, allocator);
+            try format_cmd.run(cmd, allocator);
         },
         .auto => |cmd| {
             // Auto-detect based on file extension or flags
@@ -45,7 +46,7 @@ pub fn main() !void {
 const Command = union(enum) {
     serialize: serialize_cmd.Command,
     deserialize: deserialize_cmd.Command,
-    format: void,
+    format: format_cmd.Command,
     auto: AutoCommand,
 };
 
@@ -88,7 +89,7 @@ fn parseCommand(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !C
             std.process.exit(0);
         }
 
-        if (std.mem.eql(u8, arg, "serialize") or std.mem.eql(u8, arg, "deserialize") or std.mem.eql(u8, arg, "format")) {
+        if (std.mem.eql(u8, arg, "serialize") or std.mem.eql(u8, arg, "deserialize") or std.mem.eql(u8, arg, "format") or std.mem.eql(u8, arg, "fmt")) {
             if (command_type != null) {
                 return error.InvalidArguments;
             }
@@ -96,7 +97,7 @@ fn parseCommand(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !C
                 command_type = .serialize;
             } else if (std.mem.eql(u8, arg, "deserialize")) {
                 command_type = .deserialize;
-            } else if (std.mem.eql(u8, arg, "format")) {
+            } else if (std.mem.eql(u8, arg, "format") or std.mem.eql(u8, arg, "fmt")) {
                 command_type = .format;
             }
         } else if (std.mem.eql(u8, arg, "--zon") or std.mem.eql(u8, arg, "-z")) {
@@ -113,11 +114,15 @@ fn parseCommand(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !C
             if (i >= arg_list.items.len) return error.InvalidArguments;
             output_path = try allocator.dupe(u8, arg_list.items[i]);
         } else if (!std.mem.startsWith(u8, arg, "-")) {
-            if (input_path == null) {
-                input_path = try allocator.dupe(u8, arg);
-            } else {
-                return error.InvalidArguments;
+            // Only set input_path if we're in auto-detect mode (no command specified yet)
+            if (command_type == null) {
+                if (input_path == null) {
+                    input_path = try allocator.dupe(u8, arg);
+                } else {
+                    return error.InvalidArguments;
+                }
             }
+            // If a command is already specified, the positional args will be handled by the command parser
         } else {
             // Unknown flag, might be for serialize/deserialize commands
             // We'll handle those in the command parsers
@@ -137,7 +142,7 @@ fn parseCommand(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !C
         // Skip the command name and collect remaining args
         var found_cmd = false;
         for (arg_list.items) |arg| {
-            if (!found_cmd and (std.mem.eql(u8, arg, "serialize") or std.mem.eql(u8, arg, "deserialize"))) {
+            if (!found_cmd and (std.mem.eql(u8, arg, "serialize") or std.mem.eql(u8, arg, "deserialize") or std.mem.eql(u8, arg, "format") or std.mem.eql(u8, arg, "fmt"))) {
                 found_cmd = true;
                 continue;
             }
@@ -156,7 +161,8 @@ fn parseCommand(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !C
                 return Command{ .deserialize = cmd };
             },
             .format => {
-                return Command{ .format = {} };
+                const cmd = try format_cmd.parseCommand(cmd_args.items, allocator, input_path, output_path);
+                return Command{ .format = cmd };
             },
             .auto => unreachable,
         }
@@ -305,6 +311,13 @@ fn freeCommandStrings(cmd: anytype, allocator: std.mem.Allocator) void {
                         .stdin => {},
                     }
                 }
+                // Handle format InputSource
+                else if (FieldType == format_cmd.InputSource) {
+                    switch (field_value) {
+                        .file => |path| allocator.free(path),
+                        .stdin => {},
+                    }
+                }
             }
         },
         else => {},
@@ -328,21 +341,32 @@ fn printUsage() void {
         \\Commands:
         \\  serialize    Convert JSON or ZON to TOON
         \\  deserialize  Convert TOON to JSON or ZON
-        \\  format       Format TOON file (TODO)
+        \\  format       Format TOON file to canonical representation
+        \\  fmt          Alias for format
         \\
-        \\Options:
+        \\Common Options:
         \\  -o, --output <path>  Output file path (default: stdout)
         \\  --zon, -z            Output as ZON format
         \\  --json, -j           Output as JSON format (default for deserialize)
         \\  --toon, -t           Output as TOON format
+        \\
+        \\Format Options:
+        \\  --indent <n>         Number of spaces for indentation (default: 2)
+        \\  --delimiter <char>   Delimiter for arrays (default: ,)
+        \\  --key-folding=safe   Enable key folding
+        \\  --check, -c          Check if formatting is needed (exit 1 if not formatted)
+        \\  --in-place, -i       Modify file in place
         \\
         \\Examples:
         \\  toonz sample.json              # Convert JSON to TOON
         \\  toonz sample.toon              # Convert TOON to JSON
         \\  toonz sample.zon               # Convert ZON to TOON
         \\  toonz sample.toon --zon        # Convert TOON to ZON
+        \\  toonz format sample.toon       # Format TOON file
+        \\  toonz fmt sample.toon -i       # Format TOON file in place
+        \\  toonz fmt sample.toon --check  # Check if file is formatted
         \\  echo '...' | toonz serialize   # Convert JSON/ZON from stdin to TOON
-        \\  echo '...' | toonz deserialize  # Convert TOON from stdin to JSON
+        \\  echo '...' | toonz deserialize # Convert TOON from stdin to JSON
         \\
     ) catch {};
 }

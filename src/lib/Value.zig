@@ -17,7 +17,9 @@ pub const Value = union(enum) {
     object: Object,
 
     pub const Array = std.ArrayList(Value);
-    pub const Object = std.StringHashMap(Value);
+    /// Uses StringArrayHashMap to preserve field insertion order.
+    /// This is important for formatting operations where field order should be maintained.
+    pub const Object = std.StringArrayHashMap(Value);
 
     /// Recursively deallocate all memory associated with this value.
     pub fn deinit(self: Value, allocator: Allocator) void {
