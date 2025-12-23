@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const deserialize = @import("deserialize/root.zig");
+pub const deserialize = @import("deserialize/root.zig");
 pub const Parse = deserialize.Parse;
 
 pub const serialize = @import("serialize/root.zig");
