@@ -34,7 +34,7 @@ jobs:
         run: zig build --summary all tests
 
       - name: Build docs
-        run: zig build-lib -femit-docs zig-out/docs
+        run: zig build-lib -femit-docs=zig-out/docs src/lib/root.zig
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
