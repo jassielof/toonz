@@ -34,12 +34,12 @@ jobs:
         run: zig build --summary all tests
 
       - name: Build docs
-        run: zig build --summary all docs
+        run: zig build-lib -femit-docs zig-out/docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: "zig-out/docs"
+          path: zig-out/docs
 
   pages:
     environment:
