@@ -11,7 +11,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const lib = b.addLibrary(.{ .name = mod_name, .root_module = lib_mod });
+    const lib = b.addLibrary(.{
+        .name = mod_name,
+        .root_module = lib_mod,
+    });
 
     const exe = b.addExecutable(.{
         .name = mod_name,
@@ -19,9 +22,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/cli/main.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{ .name = mod_name, .module = lib_mod },
-            },
+            .imports = &.{.{
+                .name = mod_name,
+                .module = lib_mod,
+            }},
         }),
     });
 
@@ -46,7 +50,17 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("docs", "Generate documentation");
     docs_step.dependOn(&docs.step);
 
-    const tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("tests/suite.zig"), .target = target, .optimize = optimize, .imports = &.{.{ .name = mod_name, .module = lib_mod }} }) });
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/suite.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{
+                .name = mod_name,
+                .module = lib_mod,
+            }},
+        }),
+    });
     const run_tests = b.addRunArtifact(tests);
 
     const test_step = b.step("tests", "Run tests");
