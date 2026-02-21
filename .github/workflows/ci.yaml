@@ -25,8 +25,8 @@ jobs:
 
       - uses: mlugg/setup-zig@v2
 
-      - run: zig fmt src/ tests/ --check
-        name: Check formatting
+      - name: Check formatting
+        run: zig fmt src/ tests/ --check
 
       - name: Build
         run: zig build --summary all -Doptimize=ReleaseSafe
