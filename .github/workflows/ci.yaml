@@ -28,13 +28,13 @@ jobs:
       - uses: mlugg/setup-zig@v2
 
       - name: Build
-        run: zig build --summary all
+        run: zig build --summary all -Doptimize=ReleaseSafe
 
       - name: Test
-        run: zig build --summary all tests
+        run: zig build --summary all -Doptimize=ReleaseSafe tests
 
       - name: Build docs
-        run: zig build-lib -femit-docs=zig-out/docs src/lib/root.zig
+        run: zig build --summary all docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
